@@ -1,14 +1,14 @@
 /**
- * protodatepicker.js - MooTools Datepicker class port to Prototype
+ * protodatepicker.js - Fork using Prototype.js of Mootools Datepicker
  * @version 1.16
  * 
- * by MonkeyPhysics.com, port by Paridans.org
+ * by Pierre Paridans, original project by MonkeyPhysics.com (http://www.monkeyphysics.com/mootools/script/2/datepicker)
  *
  * Source/Documentation available at:
  * http://www.monkeyphysics.com/mootools/script/2/datepicker
  * 
  * Prototype port Source/Documentation:
- * http://paridans.org/projects/protodatepicker
+ * http://github.com/pparidans/protodatepicker
  * --
  * 
  * Smoothly animating, very configurable and easy to install.
