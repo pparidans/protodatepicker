@@ -1,12 +1,14 @@
 /**
- * datepicker.js - MooTools Datepicker class
+ * protodatepicker.js - MooTools Datepicker class port to Prototype
  * @version 1.16
  * 
- * by MonkeyPhysics.com
+ * by MonkeyPhysics.com, port by Paridans.org
  *
  * Source/Documentation available at:
  * http://www.monkeyphysics.com/mootools/script/2/datepicker
  * 
+ * Prototype port Source/Documentation:
+ * http://paridans.org/projects/protodatepicker
  * --
  * 
  * Smoothly animating, very configurable and easy to install.
@@ -14,14 +16,17 @@
  * 
  * --
  *
+ * Requires Prototype 1.6.1+ & Scripty2 2.0.0_a1+
+ *
+ * --
  * Some Rights Reserved
  * http://creativecommons.org/licenses/by-sa/3.0/
  * 
  */
 
-var DatePicker = new Class({
+var DatePicker = Class.create({
 	
-	Implements: Options,
+	//Implements: Options,
 	
 	// working date, which we will keep modifying to render the calendars
 	d: '',
@@ -61,8 +66,8 @@ var DatePicker = new Class({
 		format: 'd-m-Y',
 		allowEmpty: false,
 		inputOutputFormat: 'U', // default to unix timestamp
-		animationDuration: 400,
-		useFadeInOut: !Browser.Engine.trident, // dont animate fade-in/fade-out for IE
+		animationDuration: 0.2,	// Default Scripty2 duration, this speed is based on the value Mac OS X uses for interface effects.
+		useFadeInOut: !Prototype.Browser.IE, // dont animate fade-in/fade-out for IE
 		startView: 'month', // allowed values: {time, month, year, decades}
 		positionOffset: { x: 0, y: 0 },
 		minDate: null, // { date: '[date-string]', format: '[date-string-interpretation-format]' }
@@ -71,20 +76,23 @@ var DatePicker = new Class({
 		toggleElements: null,
 		
 		// and some event hooks:
-		onShow: $empty,   // triggered when the datepicker pops up
-		onClose: $empty,  // triggered after the datepicker is closed (destroyed)
-		onSelect: $empty  // triggered when a date is selected
+		onShow: Prototype.emptyFunction,   // triggered when the datepicker pops up
+		onClose: Prototype.emptyFunction,  // triggered after the datepicker is closed (destroyed)
+		onSelect: Prototype.emptyFunction  // triggered when a date is selected
 	},
 	
 	initialize: function(attachTo, options) {
 		this.attachTo = attachTo;
-		this.setOptions(options).attach();
+		//this.setOptions(options).attach();
+		Object.extend(this.options, options || { });
+		this.attach();
 		if (this.options.timePickerOnly) {
 			this.options.timePicker = true;
 			this.options.startView = 'time';
 		}
 		this.formatMinMaxDates();
-		document.addEvent('mousedown', this.close.bind(this));
+		//document.addEvent('mousedown', this.close.bind(this));
+		document.observe("mousedown", this.close.bind(this));
 	},
 	
 	formatMinMaxDates: function() {
@@ -101,26 +109,25 @@ var DatePicker = new Class({
 	
 	attach: function() {
 		// toggle the datepicker through a separate element?
-		if ($chk(this.options.toggleElements)) {
+		//if ($chk(this.options.toggleElements)) {
+		if(this.options.toggleElements || this.options.toggleElements === 0) {
 			var togglers = $$(this.options.toggleElements);
-			document.addEvents({
-				'keydown': function(e) {
-					if (e.key == "tab") {
-						this.close(null, true);
-					}
-				}.bind(this)
-			});
+			document.observe('keydown', function(e) {
+				if (e.keyCode == Event.KEY_TAB) {
+					this.close(null, true);
+				}
+			}.bind(this));
 		};
 		
 		// attach functionality to the inputs		
 		$$(this.attachTo).each(function(item, index) {
 			
 			// never double attach
-			if (item.retrieve('datepicker')) return;
+			if (item.getStorage().datepicker) return;
 			
 			// determine starting value(s)
-			if ($chk(item.get('value'))) {
-				var init_clone_val = this.format(new Date(this.unformat(item.get('value'), this.options.inputOutputFormat)), this.options.format);
+			if ($F(item) || $F(item) === 0) {
+				var init_clone_val = this.format(new Date(this.unformat($F(item), this.options.inputOutputFormat)), this.options.format);
 			} else if (!this.options.allowEmpty) {
 				var init_clone_val = this.format(new Date(), this.options.format);
 			} else {
@@ -130,66 +137,61 @@ var DatePicker = new Class({
 			// create clone
 			var display = item.getStyle('display');
 			var clone = item
-			.setStyle('display', this.options.debug ? display : 'none')
+			.setStyle({ display: this.options.debug ? display : 'none' })
 			.store('datepicker', true) // to prevent double attachment...
 			.clone()
 			.store('datepicker', true) // ...even for the clone (!)
-			.removeProperty('name')    // secure clean (form)submission
-			.setStyle('display', display)
-			.set('value', init_clone_val)
-			.inject(item, 'after');
+			.writeAttribute('name', false)    // secure clean (form)submission
+			.writeAttribute("id", false)		// secure uniq identifier
+			.setStyle({ display: display })
+			.writeAttribute('value', init_clone_val);
+			item.insert({ after: clone });
 			
 			// events
-			if ($chk(this.options.toggleElements)) {
+			if (this.options.toggleElements || this.options.toggleElements === 0) {
 				togglers[index]
-					.setStyle('cursor', 'pointer')
-					.addEvents({
-						'click': function(e) {
-							this.onFocus(item, clone);
-						}.bind(this)
-					});
-				clone.addEvents({
-					'blur': function() {
-						item.set('value', clone.get('value'));
-					}
+					.setStyle({ cursor: 'pointer' })
+					.observe('click', function(e) {
+						this.onFocus(item, clone);
+					}.bind(this));
+				clone.observe('blur', function() {
+					item.set('value', clone.get('value'));
 				});
 			} else {
-				clone.addEvents({
-					'keydown': function(e) {
-						if (this.options.allowEmpty && (e.key == "delete" || e.key == "backspace")) {
-							item.set('value', '');
-							e.target.set('value', '');
-							this.close(null, true);
-						} else if (e.key == "tab") {
-							this.close(null, true);
-						} else {
-							e.stop();
-						}
-					}.bind(this),
-					'focus': function(e) {
-						this.onFocus(item, clone);
-					}.bind(this)
-				});
+				clone.observe('keydown', function(e) {
+					if (this.options.allowEmpty && (e.key == "delete" || e.key == "backspace")) {
+						item.set('value', '');
+						e.target.set('value', '');
+						this.close(null, true);
+					} else if (e.key == "tab") {
+						this.close(null, true);
+					} else {
+						e.stop();
+					}
+				}.bind(this))
+				.observe('focus', function(e) {
+					this.onFocus(item, clone);
+				}.bind(this));
 			}
 		}.bind(this));
 	},
 	
 	onFocus: function(original_input, visual_input) {
-		var init_visual_date, d = visual_input.getCoordinates();
+		var init_visual_date, offset = visual_input.cumulativeOffset(), dim = visual_input.getDimensions();
 		
-		if ($chk(original_input.get('value'))) {
-			init_visual_date = this.unformat(original_input.get('value'), this.options.inputOutputFormat).valueOf();
+		if ($F(original_input) || $F(original_input) === 0) {
+			init_visual_date = this.unformat($F(original_input), this.options.inputOutputFormat).valueOf();
 		} else {
 			init_visual_date = new Date();
-			if ($chk(this.options.maxDate) && init_visual_date.valueOf() > this.options.maxDate.valueOf()) {
+			if ( (this.options.maxDate || this.options.maxDate === 0) && init_visual_date.valueOf() > this.options.maxDate.valueOf()) {
 				init_visual_date = new Date(this.options.maxDate.valueOf());
 			}
-			if ($chk(this.options.minDate) && init_visual_date.valueOf() < this.options.minDate.valueOf()) {
+			if ( (this.options.minDate || this.options.minDate === 0) && init_visual_date.valueOf() < this.options.minDate.valueOf()) {
 				init_visual_date = new Date(this.options.minDate.valueOf());
 			}
 		}
 		
-		this.show({ left: d.left + this.options.positionOffset.x, top: d.top + d.height + this.options.positionOffset.y }, init_visual_date);
+		this.show({ left: (offset.left + this.options.positionOffset.x)+"px", top: (offset.top + dim.height + this.options.positionOffset.y)+"px" }, init_visual_date);
 		this.input = original_input;
 		this.visual = visual_input;
 		this.options.onShow();
@@ -211,7 +213,7 @@ var DatePicker = new Class({
 		d.setDate(1);
 		['year', 'month', 'day', 'hours', 'minutes', 'seconds'].each(function(type) {
 			var v = values[type];
-			if (!$chk(v)) return;
+			if (!(v || v === 0)) return;
 			switch (type) {
 				case 'day': d.setDate(v); break;
 				case 'month': d.setMonth(v); break;
@@ -226,7 +228,7 @@ var DatePicker = new Class({
 	
 	show: function(position, timestamp) {
 		this.formatMinMaxDates();
-		if ($chk(timestamp)) {
+		if (timestamp || timestamp === 0) {
 			this.d = new Date(timestamp);
 		} else {
 			this.d = new Date();
@@ -235,18 +237,20 @@ var DatePicker = new Class({
 		this.choice = this.dateToObject(this.d);
 		this.mode = (this.options.startView == 'time' && !this.options.timePicker) ? 'month' : this.options.startView;
 		this.render();
-		this.picker.setStyles(position);
+		this.picker.setStyle(position);
 	},
 	
 	render: function(fx) {
-		if (!$chk(this.picker)) {
+		if (!(this.picker || this.picker === 0)) {
 			this.constructPicker();
 		} else {
 			// swap contents so we can fill the newContents again and animate
 			var o = this.oldContents;
 			this.oldContents = this.newContents;
 			this.newContents = o;
-			this.newContents.empty();
+			this.newContents.update();
+		this.oldContents.setStyle({ visibility: "hidden" });
+		this.newContents.setStyle({ visibility: "visible" });
 		}
 		
 		// remember current working date
@@ -267,9 +271,9 @@ var DatePicker = new Class({
 			this.renderMonth();
 		}
 		
-		this.picker.getElement('.previous').setStyle('visibility', this.limit.left ? 'hidden' : 'visible');
-		this.picker.getElement('.next').setStyle('visibility', this.limit.right ? 'hidden' : 'visible');
-		this.picker.getElement('.titleText').setStyle('cursor', this.allowZoomOut() ? 'pointer' : 'default');
+		this.picker.down('.previous').setStyle({ visibility: this.limit.left ? 'hidden' : 'visible' });
+		this.picker.down('.next').setStyle({ visibility: this.limit.right ? 'hidden' : 'visible' });
+		this.picker.down('.titleText').setStyle({ cursor: this.allowZoomOut() ? 'pointer' : 'default' });
 		
 		// restore working date
 		this.d = startDate;
@@ -277,124 +281,135 @@ var DatePicker = new Class({
 		// if ever the opacity is set to '0' it was only to have us fade it in here
 		// refer to the constructPicker() function, which instantiates the picker at opacity 0 when fading is desired
 		if (this.picker.getStyle('opacity') == 0) {
-			this.picker.tween('opacity', 0, 1);
+			//this.picker.tween('opacity', 0, 1);
+			this.picker.morph("opacity: 1", { duration: this.options.animationDuration });
 		}
 		
 		// animate
-		if ($chk(fx)) this.fx(fx);
+		if (fx || fx === 0) this.fx(fx);
 	},
 	
 	fx: function(fx) {
 		if (fx == 'right') {
-			this.oldContents.setStyles({ left: 0, opacity: 1 });
-			this.newContents.setStyles({ left: this.bodysize.x, opacity: 1 });
-			this.slider.setStyle('left', 0).tween('left', 0, -this.bodysize.x);
+			this.oldContents.setStyle({ left: "0px", opacity: 1 });
+			this.newContents.setStyle({ left: this.bodysize.width+"px", opacity: 1 });
+			this.slider.setStyle({ left: "0px" }).morph('left: '+(-this.bodysize.width)+"px", { duration: this.options.animationDuration, transition: "easeInOutExpo" });
 		} else if (fx == 'left') {
-			this.oldContents.setStyles({ left: this.bodysize.x, opacity: 1 });
-			this.newContents.setStyles({ left: 0, opacity: 1 });
-			this.slider.setStyle('left', -this.bodysize.x).tween('left', -this.bodysize.x, 0);
+			this.oldContents.setStyle({ left: this.bodysize.width+"px", opacity: 1 });
+			this.newContents.setStyle({ left: "0px", opacity: 1 });
+			this.slider.setStyle({ left: (-this.bodysize.width)+"px" }).morph('left: 0px', { duration: this.options.animationDuration, transition: "easeInOutExpo" });
 		} else if (fx == 'fade') {
-			this.slider.setStyle('left', 0);
-			this.oldContents.setStyle('left', 0).set('tween', { duration: this.options.animationDuration / 2 }).tween('opacity', 1, 0);
-			this.newContents.setStyles({ opacity: 0, left: 0}).set('tween', { duration: this.options.animationDuration }).tween('opacity', 0, 1);
+			this.slider.setStyle({ left: "0px" });
+			//this.oldContents.setStyle('left', 0).set('tween', { duration: this.options.animationDuration / 2 }).tween('opacity', 1, 0);
+			this.oldContents.setStyle({ left: "0px" }).morph("opacity: 0", { duration: (this.options.animationDuration / 2) });
+			//this.newContents.setStyle({ opacity: 0, left: 0}).set('tween', { duration: this.options.animationDuration }).tween('opacity', 0, 1);
+			this.newContents.setStyle({ opacity: 0, left: "0px"}).morph("opacity: 1", { duration: this.options.animationDuration });
 		}
 	},
 	
 	constructPicker: function() {
-		this.picker = new Element('div', { 'class': this.options.pickerClass }).inject(document.body);
+		this.picker = new Element('div', { 'class': this.options.pickerClass });
+		document.body.insert(this.picker);
 		if (this.options.useFadeInOut) {
-			this.picker.setStyle('opacity', 0).set('tween', { duration: this.options.animationDuration });
+			//this.picker.setStyle('opacity', 0).set('tween', { duration: this.options.animationDuration });
+			this.picker.setStyle({ opacity: 0 }).morph("opacity: 1", { duration: this.options.animationDuration });
 		}
 		
-		var h = new Element('div', { 'class': 'header' }).inject(this.picker);
-		var titlecontainer = new Element('div', { 'class': 'title' }).inject(h);
-		new Element('div', { 'class': 'previous' }).addEvent('click', this.previous.bind(this)).set('text', '«').inject(h);
-		new Element('div', { 'class': 'next' }).addEvent('click', this.next.bind(this)).set('text', '»').inject(h);
-		new Element('div', { 'class': 'closeButton' }).addEvent('click', this.close.bindWithEvent(this, true)).set('text', 'x').inject(h);
-		new Element('span', { 'class': 'titleText' }).addEvent('click', this.zoomOut.bind(this)).inject(titlecontainer);
+		var h = new Element('div', { 'class': 'header' });
+		this.picker.insert(h);
+		var titlecontainer = new Element('div', { 'class': 'title' });
+		h.insert(titlecontainer);
+		h.insert(new Element('div', { 'class': 'previous' }).observe('click', this.previous.bind(this)).update('«'));
+		h.insert(new Element('div', { 'class': 'next' }).observe('click', this.next.bind(this)).update('»'));
+		h.insert(new Element('div', { 'class': 'closeButton' }).observe('click', this.close.bindAsEventListener(this, true)).update('x'));
+		titlecontainer.insert(new Element('span', { 'class': 'titleText' }).observe('click', this.zoomOut.bind(this)));
 		
-		var b = new Element('div', { 'class': 'body' }).inject(this.picker);
-		this.bodysize = b.getSize();
-		this.slider = new Element('div', { styles: { position: 'absolute', top: 0, left: 0, width: 2 * this.bodysize.x, height: this.bodysize.y }})
-					.set('tween', { duration: this.options.animationDuration, transition: Fx.Transitions.Quad.easeInOut }).inject(b);
-		this.oldContents = new Element('div', { styles: { position: 'absolute', top: 0, left: this.bodysize.x, width: this.bodysize.x, height: this.bodysize.y }}).inject(this.slider);
-		this.newContents = new Element('div', { styles: { position: 'absolute', top: 0, left: 0, width: this.bodysize.x, height: this.bodysize.y }}).inject(this.slider);
+		var b = new Element('div', { 'class': 'body' });
+		this.picker.insert(b);
+		//this.bodysize = b.getSize();
+		this.bodysize = b.getDimensions();
+		this.slider = new Element('div').setStyle({ position: 'absolute', top: 0, left: "0px", width: (2 * this.bodysize.width)+"px", height: this.bodysize.height+"px" });
+		//.set('tween', { duration: this.options.animationDuration, transition: Fx.Transitions.Quad.easeInOut })
+		//.inject(b);
+		b.insert(this.slider);
+		this.oldContents = new Element('div').setStyle({ position: 'absolute', top: 0, left: this.bodysize.width+"px", width: this.bodysize.width+"px", height: this.bodysize.height+"px" });
+		this.slider.insert(this.oldContents);
+		this.newContents = new Element('div').setStyle({ position: 'absolute', top: 0, left: "0px", width: this.bodysize.width+"px", height: this.bodysize.height+"px" });
+		this.slider.insert(this.newContents);
 	},
 	
 	renderTime: function() {
-		var container = new Element('div', { 'class': 'time' }).inject(this.newContents);
+		var container = new Element('div', { 'class': 'time' });
+		this.newContents.insert(container);
 		
 		if (this.options.timePickerOnly) {
-			this.picker.getElement('.titleText').set('text', 'Select a time');
+			this.picker.down('.titleText').update('Select a time');
 		} else {
-			this.picker.getElement('.titleText').set('text', this.format(this.d, 'j M, Y'));
+			this.picker.down('.titleText').update(this.format(this.d, 'j M, Y'));
 		}
 		
-		new Element('input', { type: 'text', 'class': 'hour' })
-			.set('value', this.leadZero(this.d.getHours()))
-			.addEvents({
-				mousewheel: function(e) {
-					var i = e.target, v = i.get('value').toInt();
-					i.focus();
-					if (e.wheel > 0) {
-						v = (v < 23) ? v + 1 : 0;
-					} else {
-						v = (v > 0) ? v - 1 : 23;
-					}
-					i.set('value', this.leadZero(v));
-					e.stop();
-				}.bind(this)
-			})
-			.set('maxlength', 2)
-			.inject(container);
+		container.insert(new Element('input', { type: 'text', 'class': 'hour' })
+			.writeAttribute('value', this.leadZero(this.d.getHours()))
+			.observe("mousewheel", function(e) {
+				var i = e.element(), v = parseInt($F(i), 10);
+				i.focus();
+				if (e.wheel > 0) {
+					v = (v < 23) ? v + 1 : 0;
+				} else {
+					v = (v > 0) ? v - 1 : 23;
+				}
+				i.writeAttribute('value', this.leadZero(v));
+				e.stop();
+			}.bind(this))
+			.writeAttribute('maxlength', 2)
+		);
 			
-		new Element('input', { type: 'text', 'class': 'minutes' })
-			.set('value', this.leadZero(this.d.getMinutes()))
-			.addEvents({
-				mousewheel: function(e) {
-					var i = e.target, v = i.get('value').toInt();
-					i.focus();
-					if (e.wheel > 0) {
-						v = (v < 59) ? v + 1 : 0;
-					} else {
-						v = (v > 0) ? v - 1 : 59;
-					}
-					i.set('value', this.leadZero(v));
-					e.stop();
-				}.bind(this)
-			})
-			.set('maxlength', 2)
-			.inject(container);
+		container.insert(new Element('input', { type: 'text', 'class': 'minutes' })
+			.writeAttribute('value', this.leadZero(this.d.getMinutes()))
+			.observe("mousewheel", function(e) {
+				var i = e.element(), v = parseInt($F(i), 10);
+				i.focus();
+				if (e.wheel > 0) {
+					v = (v < 59) ? v + 1 : 0;
+				} else {
+					v = (v > 0) ? v - 1 : 59;
+				}
+				i.writeAttribute('value', this.leadZero(v));
+				e.stop();
+			}.bind(this))
+			.writeAttribute('maxlength', 2)
+		);
 		
-		new Element('div', { 'class': 'separator' }).set('text', ':').inject(container);
+		container.insert(new Element('div', { 'class': 'separator' }).update(':'));
 		
-		new Element('input', { type: 'submit', value: 'OK', 'class': 'ok' })
-			.addEvents({
-				click: function(e) {
-					e.stop();
-					this.select($merge(this.dateToObject(this.d), { hours: this.picker.getElement('.hour').get('value').toInt(), minutes: this.picker.getElement('.minutes').get('value').toInt() }));
-				}.bind(this)
-			})
-			.set('maxlength', 2)
-			.inject(container);
+		container.insert(new Element('input', { type: 'submit', value: 'OK', 'class': 'ok' })
+			.observe("click", function(e) {
+				e.stop();
+				//this.select($merge(this.dateToObject(this.d), { hours: this.picker.getElement('.hour').get('value').toInt(), minutes: $F(this.picker.down('.minutes')).toInt() }));
+				this.select(Object.extend(this.dateToObject(this.d), { hours: parseInt($F(this.picker.down('.hour')), 10), minutes: parseInt($F(this.picker.down('.minutes')), 10) }));
+			}.bind(this))
+			.writeAttribute('maxlength', 2)
+		);
 	},
 	
 	renderMonth: function() {
 		var month = this.d.getMonth();
 		
-		this.picker.getElement('.titleText').set('text', this.options.months[month] + ' ' + this.d.getFullYear());
+		this.picker.down('.titleText').update(this.options.months[month] + ' ' + this.d.getFullYear());
 		
 		this.d.setDate(1);
 		while (this.d.getDay() != this.options.startDay) {
 			this.d.setDate(this.d.getDate() - 1);
 		}
 		
-		var container = new Element('div', { 'class': 'days' }).inject(this.newContents);
-		var titles = new Element('div', { 'class': 'titles' }).inject(container);
+		var container = new Element('div', { 'class': 'days' });
+		this.newContents.insert(container);
+		var titles = new Element('div', { 'class': 'titles' });
+		container.insert(titles);
 		var d, i, classes, e, weekcontainer;
 
 		for (d = this.options.startDay; d < (this.options.startDay + 7); d++) {
-			new Element('div', { 'class': 'title day day' + (d % 7) }).set('text', this.options.days[(d % 7)].substring(0,this.options.dayShort)).inject(titles);
+			titles.insert(new Element('div', { 'class': 'title day day' + (d % 7) }).update(this.options.days[(d % 7)].substring(0,this.options.dayShort)));
 		}
 		
 		var available = false;
@@ -410,12 +425,14 @@ var DatePicker = new Class({
 			if (this.d.getMonth() != month) classes.push('otherMonth');
 			
 			if (i % 7 == 0) {
-				weekcontainer = new Element('div', { 'class': 'week week'+(Math.floor(i/7)) }).inject(container);
+				weekcontainer = new Element('div', { 'class': 'week week'+(Math.floor(i/7)) });
+				container.insert(weekcontainer);
 			}
 			
-			e = new Element('div', { 'class': classes.join(' ') }).set('text', this.d.getDate()).inject(weekcontainer);
+			e = new Element('div', { 'class': classes.join(' ') }).update(this.d.getDate());
+			weekcontainer.insert(e);
 			if (this.limited('date')) {
-				e.addClass('unavailable');
+				e.addClassName('unavailable');
 				if (available) {
 					this.limit.right = true;
 				} else if (this.d.getMonth() == month) {
@@ -423,7 +440,7 @@ var DatePicker = new Class({
 				}
 			} else {
 				available = true;
-				e.addEvent('click', function(e, d) {
+				e.observe('click', function(e, d) {
 					if (this.options.timePicker) {
 						this.d.setDate(d.day);
 						this.d.setMonth(d.month);
@@ -432,7 +449,7 @@ var DatePicker = new Class({
 					} else {
 						this.select(d);
 					}
-				}.bindWithEvent(this, { day: this.d.getDate(), month: this.d.getMonth(), year: this.d.getFullYear() }));
+				}.bindAsEventListener(this, { day: this.d.getDate(), month: this.d.getMonth(), year: this.d.getFullYear() }));
 			}
 			this.d.setDate(this.d.getDate() + 1);
 		}
@@ -444,19 +461,21 @@ var DatePicker = new Class({
 		var thisyear = this.d.getFullYear() == this.today.getFullYear();
 		var selectedyear = this.d.getFullYear() == this.choice.year;
 		
-		this.picker.getElement('.titleText').set('text', this.d.getFullYear());
+		this.picker.down('.titleText').update(this.d.getFullYear());
 		this.d.setMonth(0);
 		
 		var i, e;
 		var available = false;
-		var container = new Element('div', { 'class': 'months' }).inject(this.newContents);
+		var container = new Element('div', { 'class': 'months' });
+		this.newContents.insert(container);
 		
 		for (i = 0; i <= 11; i++) {
 			e = new Element('div', { 'class': 'month month'+(i+1)+(i == month && thisyear ? ' today' : '')+(i == this.choice.month && selectedyear ? ' selected' : '') })
-			.set('text', this.options.monthShort ? this.options.months[i].substring(0, this.options.monthShort) : this.options.months[i]).inject(container);
+			.update(this.options.monthShort ? this.options.months[i].substring(0, this.options.monthShort) : this.options.months[i]);
+			container.insert(e);
 			
 			if (this.limited('month')) {
-				e.addClass('unavailable');
+				e.addClassName('unavailable');
 				if (available) {
 					this.limit.right = true;
 				} else {
@@ -464,12 +483,12 @@ var DatePicker = new Class({
 				}
 			} else {
 				available = true;
-				e.addEvent('click', function(e, d) {
+				e.observe('click', function(e, d) {
 					this.d.setDate(1);
 					this.d.setMonth(d);
 					this.mode = 'month';
 					this.render('fade');
-				}.bindWithEvent(this, i));
+				}.bindAsEventListener(this, i));
 			}
 			this.d.setMonth(i);
 		}
@@ -482,22 +501,24 @@ var DatePicker = new Class({
 			this.d.setFullYear(this.d.getFullYear() - 1);
 		}
 
-		this.picker.getElement('.titleText').set('text', this.d.getFullYear() + '-' + (this.d.getFullYear() + this.options.yearsPerPage - 1));
+		this.picker.down('.titleText').update(this.d.getFullYear() + '-' + (this.d.getFullYear() + this.options.yearsPerPage - 1));
 		
 		var i, y, e;
 		var available = false;
-		var container = new Element('div', { 'class': 'years' }).inject(this.newContents);
+		var container = new Element('div', { 'class': 'years' });
+		this.newContents.insert(container);
 		
-		if ($chk(this.options.minDate) && this.d.getFullYear() <= this.options.minDate.getFullYear()) {
+		if ((this.options.minDate || this.options.minDate === 0) && this.d.getFullYear() <= this.options.minDate.getFullYear()) {
 			this.limit.left = true;
 		}
 		
 		for (i = 0; i < this.options.yearsPerPage; i++) {
 			y = this.d.getFullYear();
-			e = new Element('div', { 'class': 'year year' + i + (y == this.today.getFullYear() ? ' today' : '') + (y == this.choice.year ? ' selected' : '') }).set('text', y).inject(container);
+			e = new Element('div', { 'class': 'year year' + i + (y == this.today.getFullYear() ? ' today' : '') + (y == this.choice.year ? ' selected' : '') }).update(y);
+			container.insert(e);
 			
 			if (this.limited('year')) {
-				e.addClass('unavailable');
+				e.addClassName('unavailable');
 				if (available) {
 					this.limit.right = true;
 				} else {
@@ -505,25 +526,25 @@ var DatePicker = new Class({
 				}
 			} else {
 				available = true;
-				e.addEvent('click', function(e, d) {
+				e.observe('click', function(e, d) {
 					this.d.setFullYear(d);
 					this.mode = 'year';
 					this.render('fade');
-				}.bindWithEvent(this, y));
+				}.bindAsEventListener(this, y));
 			}
 			this.d.setFullYear(this.d.getFullYear() + 1);
 		}
 		if (!available) {
 			this.limit.right = true;
 		}
-		if ($chk(this.options.maxDate) && this.d.getFullYear() >= this.options.maxDate.getFullYear()) {
+		if ((this.options.maxDate || this.options.maxDate === 0) && this.d.getFullYear() >= this.options.maxDate.getFullYear()) {
 			this.limit.right = true;
 		}
 	},
 	
 	limited: function(type) {
-		var cs = $chk(this.options.minDate);
-		var ce = $chk(this.options.maxDate);
+		var cs = (this.options.minDate || this.options.minDate === 0);
+		var ce = (this.options.maxDate || this.options.maxDate === 0);
 		if (!cs && !ce) return false;
 		
 		switch (type) {
@@ -532,9 +553,9 @@ var DatePicker = new Class({
 				
 			case 'month':
 				// todo: there has got to be an easier way...?
-				var ms = ('' + this.d.getFullYear() + this.leadZero(this.d.getMonth())).toInt();
-				return cs && ms < ('' + this.options.minDate.getFullYear() + this.leadZero(this.options.minDate.getMonth())).toInt()
-					|| ce && ms > ('' + this.options.maxDate.getFullYear() + this.leadZero(this.options.maxDate.getMonth())).toInt()
+				var ms = parseInt(('' + this.d.getFullYear() + this.leadZero(this.d.getMonth())), 10);
+				return cs && ms < parseInt(('' + this.options.minDate.getFullYear() + this.leadZero(this.options.minDate.getMonth())), 10)
+					|| ce && ms > parseInt(('' + this.options.maxDate.getFullYear() + this.leadZero(this.options.maxDate.getMonth())), 10)
 				
 			case 'date':
 				return (cs && this.d < this.options.minDate) || (ce && this.d > this.options.maxDate);
@@ -584,10 +605,11 @@ var DatePicker = new Class({
 	
 	close: function(e, force) {
 		if (!$(this.picker)) return;
-		var clickOutside = ($chk(e) && e.target != this.picker && !this.picker.hasChild(e.target) && e.target != this.visual);
+		var clickOutside = ((e || e === 0) && e.element() != this.picker && !e.element().descendantOf(this.picker) && e.element() != this.visual);
 		if (force || clickOutside) {
 			if (this.options.useFadeInOut) {
-				this.picker.set('tween', { duration: this.options.animationDuration / 2, onComplete: this.destroy.bind(this) }).tween('opacity', 1, 0);
+				//this.picker.set('tween', { duration: this.options.animationDuration / 2, onComplete: this.destroy.bind(this) }).tween('opacity', 1, 0);
+				this.picker.morph("opacity: 0", { duration: this.options.animationDuration / 2, after: this.destroy.bind(this) });
 			} else {
 				this.destroy();
 			}
@@ -595,16 +617,16 @@ var DatePicker = new Class({
 	},
 	
 	destroy: function() {
-		this.picker.destroy();
+		this.picker.remove();
 		this.picker = null;
 		this.options.onClose();
 	},
 	
 	select: function(values) {
-		this.choice = $merge(this.choice, values);
+		this.choice = Object.extend(this.choice, values);
 		var d = this.dateFromObject(this.choice);
-		this.input.set('value', this.format(d, this.options.inputOutputFormat));
-		this.visual.set('value', this.format(d, this.options.format));
+		this.input.writeAttribute('value', this.format(d, this.options.inputOutputFormat));
+		this.visual.writeAttribute('value', this.format(d, this.options.format));
 		this.options.onSelect(d);
 		this.close(null, true);
 	},
@@ -678,9 +700,9 @@ var DatePicker = new Class({
 				default:  r = null;
 			}
 			
-			if ($chk(r)) {
+			if (r || r === 0) {
 				m = t.match('^'+r);
-				if ($chk(m)) {
+				if (m || m === 0) {
 					a[c] = m[0];
 					t = t.substring(a[c].length);
 				} else {
@@ -695,7 +717,7 @@ var DatePicker = new Class({
 		for (c in a) {
 			var v = a[c];
 			switch(c) {
-				case 'y': d.setFullYear(v < 30 ? 2000 + v.toInt() : 1900 + v.toInt()); break; // assume between 1930 - 2029
+				case 'y': d.setFullYear(v < 30 ? 2000 + parseInt(v, 10) : 1900 + parseInt(v, 10)); break; // assume between 1930 - 2029
 				case 'Y': d.setFullYear(v); break;
 				case 'm':
 				case 'n': d.setMonth(v - 1); break;
@@ -707,10 +729,10 @@ var DatePicker = new Class({
 				case 'G': 
 				case 'H': d.setHours(v); break;
 				case 'g': 
-				case 'h': if (a['a'] == 'pm' || a['A'] == 'PM') { d.setHours(v == 12 ? 0 : v.toInt() + 12); } else { d.setHours(v); } break;
+				case 'h': if (a['a'] == 'pm' || a['A'] == 'PM') { d.setHours(v == 12 ? 0 : parseInt(v, 10) + 12); } else { d.setHours(v); } break;
 				case 'i': d.setMinutes(v); break;
 				case 's': d.setSeconds(v); break;
-				case 'U': d = new Date(v.toInt() * 1000);
+				case 'U': d = new Date(parseInt(v, 10) * 1000);
 			}
 		};
 		
